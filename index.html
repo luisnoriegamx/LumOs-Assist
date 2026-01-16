@@ -236,4 +236,246 @@
                 if(empForm.pass) d.password = empForm.pass;
                 if(editEmpId) await updateDoc(doc(database, `artifacts/${appId}/public/data/employees`, editEmpId), d);
                 else await setDoc(doc(database, `artifacts/${appId}/public/data/employees`, empForm.id), {...d, createdAt: serverTimestamp()});
-                setEditEmpId(null); setEmpForm({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart
+                setEditEmpId(null); setEmpForm({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart: '', lunchEnd: '' });
+            };
+            const delEmp = async(id) => confirm("¿Borrar?") && deleteDoc(doc(database, `artifacts/${appId}/public/data/employees`, id));
+            const saveZone = async(e) => {
+                e.preventDefault(); const z = { name: zoneForm.name, latitude: parseFloat(zoneForm.lat), longitude: parseFloat(zoneForm.lon), radius: parseInt(zoneForm.rad), id: crypto.randomUUID() };
+                await setDoc(doc(database, `artifacts/${appId}/public/data/settings`, "geofence"), { zones: [...zones, z], blockOutOfFence: blockOut }, { merge: true });
+                setZoneForm({ name: '', lat: '', lon: '', rad: '150' });
+            };
+            const delZone = async(id) => { await setDoc(doc(database, `artifacts/${appId}/public/data/settings`, "geofence"), { zones: zones.filter(z=>z.id!==id), blockOutOfFence: blockOut }, { merge: true }); };
+            const locZone = async() => { try{const l=await getUserLocation(); setZoneForm({...zoneForm, lat:l.latitude, lon:l.longitude});}catch(e){alert(e.message);} };
+            const saveAdmin = async(e) => { e.preventDefault(); await setDoc(doc(database, `artifacts/${appId}/public/data/admins`, newAdmin.id.toUpperCase()), { name: newAdmin.name, password: newAdmin.pass }); setNewAdmin({id:'',name:'',pass:''}); };
+            const delAdmin = async(id) => confirm("¿Borrar?") && deleteDoc(doc(database, `artifacts/${appId}/public/data/admins`, id));
+
+            const genReport = () => {
+                const s = new Date(filters.start); s.setHours(0,0,0,0);
+                const e = new Date(filters.end); e.setHours(23,59,59,999);
+                let res = allLogs.filter(l => l.timestamp >= s && l.timestamp <= e);
+                setReport(res.map(l => {
+                    const emp = employees.find(e => e.id === l.employeeId);
+                    return { ...l, name: emp?.name||l.employeeId, dept: emp?.department, date: l.timestamp.toLocaleDateString(), time: l.timestamp.toLocaleTimeString(), label: l.type==='in'?'Entrada':l.type==='out'?'Salida':l.type==='break-out'?'Inicio Comida':'Fin Comida' };
+                }).sort((a,b)=>a.timestamp-b.timestamp));
+            };
+
+            const exportCSV = () => {
+                let csv = "ID,Nombre,Fecha,Hora,Tipo,Ubicacion\n" + report.map(r => `"${r.employeeId}","${r.name}","${r.date}","${r.time}","${r.label}","${r.isOutOfFence?'Fuera':'En Sitio'}"`).join("\n");
+                const a = document.createElement("a"); a.href = encodeURI("data:text/csv;charset=utf-8,"+csv); a.download = "reporte.csv"; a.click();
+            };
+
+            return (
+                <div className={`min-h-screen ${colors.bgApp} p-4 md:p-8 font-sans`}>
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div className="lg:col-span-4 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <div className="flex items-center gap-3"><AppLogo url={configForm.logoUrl} className="w-10 h-10" /><div><h1 className={`text-2xl font-bold ${colors.textMain}`} style={customStyle}>Panel RH</h1><p className="text-gray-500 text-xs">Hola, {currentAdminName}</p></div></div>
+                            <button onClick={onLogout} className="text-red-500 border border-red-200 px-3 py-1 rounded hover:bg-red-50">Salir</button>
+                        </div>
+
+                        <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <StatCard title="Empleados" value={employees.length} icon={<Icons.Users/>} color="blue" loading={loading}/>
+                            <StatCard title="Registros Hoy" value={allLogs.filter(l=>l.timestamp.toDateString()===new Date().toDateString()).length} icon={<Icons.CheckCircle/>} color="green" loading={loading}/>
+                            <StatCard title="Zonas" value={zones.length} icon={<Icons.Map/>} color="purple" loading={loading}/>
+                            <StatCard title="Admins" value={adminsList.length+1} icon={<Icons.Admin/>} color="red" loading={loading}/>
+                        </div>
+
+                        <div className="lg:col-span-1 lg:row-span-3">
+                            <div className={`${colors.bgCard} p-4 rounded-xl shadow-sm border ${colors.border} h-[80vh] flex flex-col sticky top-4`}>
+                                <h3 className={`font-bold mb-3 ${colors.textMain} flex items-center gap-2`} style={customStyle}><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> En Vivo</h3>
+                                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                                    {allLogs.slice(0,30).map(l => (
+                                        <div key={l.id} className={`p-2 rounded border text-xs ${colors.inputBg} ${colors.border}`}>
+                                            <div className="font-bold text-gray-700">{employees.find(e=>e.id===l.employeeId)?.name || l.employeeId}</div>
+                                            <div className="flex justify-between mt-1">
+                                                <span className={`font-bold ${l.type.includes('in')?'text-green-600':l.type.includes('out')?'text-red-600':'text-purple-600'}`}>{l.type.toUpperCase()}</span>
+                                                <span className="text-gray-500">{l.timestamp.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+                                            </div>
+                                            {l.isOutOfFence && <div className="text-red-500 font-bold mt-1">⚠️ Fuera de Zona</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`lg:col-span-3 ${colors.bgCard} p-6 rounded-xl shadow-sm border ${colors.border}`}>
+                            <h3 className={`font-bold mb-4 ${colors.textMain}`} style={customStyle}>Configuración Visual</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="text-xs font-bold text-gray-400 block mb-1">Tema</label><div className="flex flex-wrap gap-1">{Object.values(THEMES).map(t=><button key={t.id} onClick={()=>setConfigForm({...configForm, theme:t.id})} className={`px-2 py-1 text-xs border rounded ${configForm.theme===t.id?'bg-blue-100 border-blue-500 text-black':'bg-white text-gray-700'}`}>{t.name}</button>)}</div></div>
+                                <div><label className="text-xs font-bold text-gray-400 block mb-1">Logo URL</label><input value={configForm.logoUrl} onChange={e=>setConfigForm({...configForm, logoUrl:e.target.value})} className="w-full border rounded p-1 text-sm bg-white text-gray-900" /></div>
+                                <div><label className="text-xs font-bold text-gray-400 block mb-1">Color Texto</label><div className="flex gap-2"><input type="color" value={configForm.textColor||'#000000'} onChange={e=>setConfigForm({...configForm, textColor:e.target.value})} className="h-8 w-12 border rounded bg-white" /><button onClick={saveConfig} className="bg-black text-white px-3 rounded text-xs">Guardar</button></div></div>
+                            </div>
+                        </div>
+
+                        <div className={`lg:col-span-3 ${colors.bgCard} p-6 rounded-xl shadow-sm border ${colors.border}`}>
+                            <h3 className={`font-bold mb-4 ${colors.textMain}`} style={customStyle}>Empleados</h3>
+                            <form onSubmit={saveEmp} className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                                <input value={empForm.id} onChange={e=>setEmpForm({...empForm, id:e.target.value})} placeholder="ID" className="border p-2 rounded bg-white text-gray-900" disabled={!!editEmpId} />
+                                <input value={empForm.name} onChange={e=>setEmpForm({...empForm, name:e.target.value})} placeholder="Nombre" className="border p-2 rounded bg-white text-gray-900" />
+                                <input value={empForm.dept} onChange={e=>setEmpForm({...empForm, dept:e.target.value})} placeholder="Depto" className="border p-2 rounded bg-white text-gray-900" />
+                                <input type="password" value={empForm.pass} onChange={e=>setEmpForm({...empForm, pass:e.target.value})} placeholder="Pass" className="border p-2 rounded bg-white text-gray-900" />
+                                <div className="col-span-2 flex gap-1 items-center bg-gray-100 p-1 rounded text-xs"><span className="font-bold w-12 text-gray-700">Turno:</span><input type="time" value={empForm.shiftStart} onChange={e=>setEmpForm({...empForm, shiftStart:e.target.value})} className="border rounded bg-white text-gray-900" /><input type="time" value={empForm.shiftEnd} onChange={e=>setEmpForm({...empForm, shiftEnd:e.target.value})} className="border rounded bg-white text-gray-900" /></div>
+                                <div className="col-span-2 flex gap-1 items-center bg-gray-100 p-1 rounded text-xs"><span className="font-bold w-12 text-gray-700">Comida:</span><input type="time" value={empForm.lunchStart} onChange={e=>setEmpForm({...empForm, lunchStart:e.target.value})} className="border rounded bg-white text-gray-900" /><input type="time" value={empForm.lunchEnd} onChange={e=>setEmpForm({...empForm, lunchEnd:e.target.value})} className="border rounded bg-white text-gray-900" /></div>
+                                <button className="col-span-4 bg-blue-600 text-white p-2 rounded font-bold">Guardar Empleado</button>
+                            </form>
+                            <div className="max-h-48 overflow-y-auto"><table className="w-full text-xs text-left"><thead><tr className="text-gray-400 border-b"><th>ID</th><th>Nombre</th><th>Turno</th><th>Acción</th></tr></thead><tbody className={colors.textMain}>{employees.map(e=><tr key={e.id} className="border-b"><td className="p-2 font-mono">{e.id}</td><td className="p-2">{e.name}</td><td className="p-2">{e.shiftStart}-{e.shiftEnd}</td><td className="p-2 flex gap-2"><button onClick={()=>{setEditEmpId(e.id); setEmpForm({...e, pass:''})}} className="text-blue-500">Edit</button><button onClick={()=>delEmp(e.id)} className="text-red-500">Del</button></td></tr>)}</tbody></table></div>
+                        </div>
+
+                         <div className={`lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6`}>
+                             <div className={`${colors.bgCard} p-6 rounded-xl shadow-sm border ${colors.border}`}>
+                                <h3 className={`font-bold mb-2 ${colors.textMain}`}>Zonas (Geocercas)</h3>
+                                <div className="flex gap-2 mb-2 items-center"><input type="checkbox" checked={blockOut} onChange={e=>setDoc(doc(database, `artifacts/${appId}/public/data/settings`, "geofence"), { zones, blockOutOfFence:e.target.checked }, {merge:true})} /><span className="text-xs text-gray-500">Bloquear Fuera</span></div>
+                                <form onSubmit={saveZone} className="grid grid-cols-4 gap-1 mb-2">
+                                    <input placeholder="Nom" value={zoneForm.name} onChange={e=>setZoneForm({...zoneForm, name:e.target.value})} className="border p-1 rounded bg-white text-gray-900" />
+                                    <input placeholder="Lat" type="number" step="any" value={zoneForm.lat} onChange={e=>setZoneForm({...zoneForm, lat:e.target.value})} className="border p-1 rounded bg-white text-gray-900" />
+                                    <input placeholder="Lon" type="number" step="any" value={zoneForm.lon} onChange={e=>setZoneForm({...zoneForm, lon:e.target.value})} className="border p-1 rounded bg-white text-gray-900" />
+                                    <input placeholder="Rad" type="number" value={zoneForm.rad} onChange={e=>setZoneForm({...zoneForm, rad:e.target.value})} className="border p-1 rounded bg-white text-gray-900" />
+                                    <button type="button" onClick={locZone} className="col-span-2 bg-blue-100 text-blue-700 p-1 rounded text-xs">📍 Mi Ubic.</button>
+                                    <button className="col-span-2 bg-green-600 text-white p-1 rounded text-xs">Guardar</button>
+                                </form>
+                                <div className="max-h-24 overflow-y-auto text-xs space-y-1">{zones.map(z=><div key={z.id} className="flex justify-between bg-gray-50 text-gray-800 p-1 rounded"><span>{z.name}</span><button onClick={()=>delZone(z.id)} className="text-red-500">X</button></div>)}</div>
+                             </div>
+
+                             <div className={`${colors.bgCard} p-6 rounded-xl shadow-sm border ${colors.border}`}>
+                                <h3 className={`font-bold mb-2 ${colors.textMain}`}>Administradores</h3>
+                                <form onSubmit={saveAdmin} className="flex gap-2 mb-2">
+                                   <input placeholder="User" value={newAdmin.id} onChange={e=>setNewAdmin({...newAdmin, id:e.target.value.toUpperCase()})} className="border p-1 rounded w-1/3 bg-white text-gray-900" />
+                                   <input placeholder="Nom" value={newAdmin.name} onChange={e=>setNewAdmin({...newAdmin, name:e.target.value})} className="border p-1 rounded w-1/3 bg-white text-gray-900" />
+                                   <input type="password" placeholder="Pass" value={newAdmin.pass} onChange={e=>setNewAdmin({...newAdmin, pass:e.target.value})} className="border p-1 rounded w-1/3 bg-white text-gray-900" />
+                                   <button className="bg-blue-600 text-white px-2 rounded text-xs">OK</button>
+                                </form>
+                                <div className="max-h-24 overflow-y-auto text-xs space-y-1">
+                                   <div className="flex justify-between p-1 bg-blue-50 text-gray-800 rounded"><span>LumOs (Master)</span></div>
+                                   {adminsList.map(a=><div key={a.id} className="flex justify-between p-1 bg-gray-50 text-gray-800 rounded"><span>{a.id} ({a.name})</span><button onClick={()=>delAdmin(a.id)} className="text-red-500">X</button></div>)}
+                                </div>
+                             </div>
+                        </div>
+
+                        <div className={`lg:col-span-3 ${colors.bgCard} p-6 rounded-xl shadow-sm border ${colors.border}`}>
+                            <h3 className={`font-bold mb-4 ${colors.textMain}`} style={customStyle}>Reportes</h3>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div><label className="text-xs font-bold text-gray-400">Fechas</label><div className="flex gap-2"><input type="date" value={filters.start} onChange={e=>setFilters({...filters, start:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-bold" /><input type="date" value={filters.end} onChange={e=>setFilters({...filters, end:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-bold" /></div></div>
+                                <div><label className="text-xs font-bold text-gray-400">Horas</label><div className="flex gap-2"><input type="time" value={filters.startTime} onChange={e=>setFilters({...filters, startTime:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-bold" /><input type="time" value={filters.endTime} onChange={e=>setFilters({...filters, endTime:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-bold" /></div></div>
+                            </div>
+                            <div className="flex gap-2"><button onClick={genReport} className="bg-blue-600 text-white flex-1 p-2 rounded font-bold">Generar</button><button onClick={exportCSV} disabled={!report.length} className="bg-green-600 text-white px-4 rounded font-bold">CSV</button></div>
+                            {report.length > 0 && <div className="mt-4 max-h-60 overflow-y-auto border rounded"><table className="w-full text-xs text-left"><thead className="bg-gray-200 text-gray-700 font-bold sticky top-0"><tr><th className="p-2">Nombre</th><th className="p-2">Fecha</th><th className="p-2">Hora</th><th className="p-2">Tipo</th><th className="p-2">Lugar</th></tr></thead><tbody className="bg-white text-gray-900">{report.map((r,i)=><tr key={i} className="border-b"><td className="p-2 font-bold">{r.name}</td><td className="p-2">{r.date}</td><td className="p-2">{r.time}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-white ${r.type.includes('in')?'bg-green-500':'bg-red-500'}`}>{r.label}</span></td><td className="p-2">{r.isOutOfFence?'❌':'✅'}</td></tr>)}</tbody></table></div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const EmployeeScreen = ({ onLogout, employeeData, globalConfig }) => {
+            const { collection, addDoc, query, where, onSnapshot, doc, getDoc } = window.firebaseModules.methods;
+            const database = window.firebaseModules.db;
+            const { colors } = THEMES[globalConfig.theme] || THEMES.azul;
+            const [logs, setLogs] = useState([]);
+            const [submitting, setSubmitting] = useState(false);
+            const appId = "lumos-assist-39e09";
+
+            useEffect(() => {
+                const q = query(collection(database, `artifacts/${appId}/public/data/attendance_logs`), where("employeeId", "==", employeeData.id));
+                return onSnapshot(q, s => setLogs(s.docs.map(d => ({id:d.id, ...d.data(), timestamp:d.data().timestamp.toDate()})).sort((a,b)=>b.timestamp-a.timestamp)));
+            }, [employeeData]);
+
+            const handleClock = async (type) => {
+                setSubmitting(true);
+                try {
+                    const loc = await getUserLocation();
+                    const conf = await getDoc(doc(database, `artifacts/${appId}/public/data/settings`, "geofence"));
+                    let out = false;
+                    if(conf.exists() && conf.data().zones?.length) {
+                        if (!conf.data().zones.some(z => getHaversineDistance(loc, z) <= z.radius)) {
+                            if(conf.data().blockOutOfFence) throw new Error("Fuera de zona"); out = true;
+                        }
+                    }
+                    await addDoc(collection(database, `artifacts/${appId}/public/data/attendance_logs`), {
+                        employeeId: employeeData.id, type, timestamp: window.firebaseModules.methods.serverTimestamp(), location: loc, isOutOfFence: out, userAgent: navigator.userAgent
+                    });
+                } catch (e) { alert(e.message); }
+                setSubmitting(false);
+            };
+
+            const last = logs[0]?.type;
+            return (
+                <div className={`min-h-screen ${colors.bgApp} flex items-center justify-center p-4`}>
+                    <div className={`w-full max-w-md ${colors.bgCard} rounded-2xl shadow-xl overflow-hidden border ${colors.border}`}>
+                        <div className={`bg-gradient-to-r ${colors.gradient} p-6 text-white text-center`}>
+                            <div className="flex justify-center mb-2"><AppLogo url={globalConfig.logoUrl} className="w-16 h-16" /></div>
+                            <h2 className="text-2xl font-bold">{employeeData.name}</h2>
+                            <p className="opacity-80 text-sm">{employeeData.department}</p>
+                            {employeeData.lunchStart && <div className="mt-2 text-xs bg-white/20 inline-block px-3 py-1 rounded-full">🍽️ {employeeData.lunchStart} - {employeeData.lunchEnd}</div>}
+                        </div>
+                        <div className="p-6 grid gap-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={()=>handleClock('in')} disabled={submitting || last==='in' || last==='break-out'} className="bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg disabled:opacity-50 transition">☀️ Entrada</button>
+                                <button onClick={()=>handleClock('out')} disabled={submitting || (last!=='in' && last!=='break-in')} className="bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-bold shadow-lg disabled:opacity-50 transition">🌙 Salida</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={()=>handleClock('break-out')} disabled={submitting || last!=='in'} className="bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg text-sm font-bold shadow disabled:opacity-50">☕ Inicio Comida</button>
+                                <button onClick={()=>handleClock('break-in')} disabled={submitting || last!=='break-out'} className="bg-indigo-500 hover:bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold shadow disabled:opacity-50">🍔 Fin Comida</button>
+                            </div>
+                            <div className="mt-4 border-t pt-2">
+                                <h3 className={`text-xs font-bold uppercase mb-2 ${colors.textSec}`}>Hoy</h3>
+                                <div className="max-h-40 overflow-y-auto space-y-2">
+                                    {logs.filter(l=>l.timestamp.toDateString()===new Date().toDateString()).map(l=>(
+                                        <div key={l.id} className={`flex justify-between items-center p-2 rounded ${colors.inputBg} border ${colors.border}`}>
+                                            <span className={`text-xs font-bold uppercase ${l.type.includes('in')?'text-green-600':'text-red-600'}`}>{l.type}</span>
+                                            <span className={`text-xs font-mono ${colors.textMain}`}>{l.timestamp.toLocaleTimeString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={onLogout} className="w-full p-3 bg-gray-50 text-gray-500 text-sm hover:bg-gray-100 font-medium border-t">Cerrar Sesión</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+            const [user, setUser] = useState(null);
+            const [admin, setAdmin] = useState(false);
+            const [emp, setEmp] = useState(null);
+            const [adminName, setAdminName] = useState('');
+            const [config, setConfig] = useState({ theme: 'azul', logoUrl: '', textColor: '' });
+
+            useEffect(() => {
+                const checkFirebase = () => {
+                    if (window.firebaseModules) {
+                        setIsFirebaseReady(true);
+                        const { auth, methods } = window.firebaseModules;
+                        methods.onAuthStateChanged(auth, u => {
+                            if(u) setUser(u); else methods.signInAnonymously(auth).catch(console.error);
+                        });
+                        document.getElementById('loader-overlay').style.opacity = '0';
+                        setTimeout(() => document.getElementById('loader-overlay').style.display = 'none', 500);
+                    }
+                };
+                window.addEventListener('firebase-ready', checkFirebase);
+                checkFirebase();
+                return () => window.removeEventListener('firebase-ready', checkFirebase);
+            }, []);
+
+            useEffect(() => {
+                if(!user || !isFirebaseReady) return;
+                const { db, methods } = window.firebaseModules;
+                return methods.onSnapshot(methods.doc(db, `artifacts/lumos-assist-39e09/public/data/settings`, "config"), s => s.exists() && setConfig(s.data()));
+            }, [user, isFirebaseReady]);
+
+            const handleLogin = (id, isAdmin, name) => {
+                if (isAdmin) { setAdmin(true); setEmp(null); setAdminName(name); } 
+                else { setAdmin(false); setEmp({ id, name }); }
+            };
+
+            if (!isFirebaseReady) return null; // El loader HTML se encarga de esto
+            if (admin) return <AdminDashboard onLogout={()=>setAdmin(false)} userId={user?.uid} currentAdminName={adminName} globalConfig={config} />;
+            if (emp) return <EmployeeScreen onLogout={()=>setEmp(null)} employeeData={emp} globalConfig={config} />;
+            return <LoginScreen onLogin={handleLogin} globalConfig={config} />;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
