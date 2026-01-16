@@ -3,48 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumos Assist - Checador</title>
+    <title>Lumos Assist</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* Forzar contraste en inputs de fecha/hora */
-        input[type="date"], input[type="time"] {
-            color-scheme: dark;
+        input[type="date"], input[type="time"] { color-scheme: dark; }
+        body { margin: 0; padding: 0; overflow-x: hidden; }
+        
+        /* Spinner de carga inicial (HTML puro) */
+        #loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 9999;
+            transition: opacity 0.5s ease;
         }
-        /* Scrollbar personalizada */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .loader {
+            width: 48px; height: 48px;
+            border: 5px solid #FFF; border-bottom-color: #3b82f6;
+            border-radius: 50%; display: inline-block;
+            box-sizing: border-box; animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 text-gray-900">
+
+    <div id="loader-overlay">
+        <span class="loader"></span>
+        <p style="color: white; margin-top: 15px; font-family: sans-serif; font-size: 14px;">Iniciando Lumos...</p>
+    </div>
+
     <div id="root"></div>
 
     <script type="module">
-        // Importamos Firebase directamente desde Google (ES Modules)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, setDoc, getDoc, deleteDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Exponemos las funciones de Firebase al objeto global 'window' para que React las vea
-        window.firebase = {
-            initializeApp, getAuth, signInAnonymously, onAuthStateChanged,
-            getFirestore, collection, addDoc, query, where, onSnapshot, doc, setDoc, getDoc, deleteDoc, serverTimestamp, updateDoc
-        };
-    </script>
-
-    <script type="text/babel">
-        // --- CONFIGURACIÓN Y VARIABLES ---
-        const { useState, useEffect, useMemo } = React;
-        
-        // Esperamos a que Firebase cargue
         const firebaseConfig = {
             apiKey: "AIzaSyAWb9rW9iJluudZksJpVAgrB6PG27m4Tqg",
             authDomain: "lumos-assist-39e09.firebaseapp.com",
@@ -54,13 +53,32 @@
             appId: "1:525173322066:web:5d0eb9db67d6cb11cd4a8b"
         };
 
-        const appId = "lumos-assist-39e09";
+        try {
+            const app = initializeApp(firebaseConfig);
+            // Exponemos Firebase al navegador de forma segura
+            window.firebaseModules = {
+                auth: getAuth(app),
+                db: getFirestore(app),
+                methods: { 
+                    signInAnonymously, onAuthStateChanged, collection, addDoc, 
+                    query, where, onSnapshot, doc, setDoc, getDoc, deleteDoc, 
+                    serverTimestamp, updateDoc 
+                }
+            };
+            
+            // Avisamos a React que Firebase está listo
+            console.log("Firebase cargado exitosamente.");
+            window.dispatchEvent(new Event('firebase-ready'));
+        } catch (e) {
+            console.error("Error cargando Firebase:", e);
+            document.querySelector('#loader-overlay p').innerText = "Error de conexión: " + e.message;
+        }
+    </script>
 
-        // Inicialización segura
-        let app, db, auth;
-        
-        // --- COMPONENTES Y LÓGICA (IDÉNTICO A TU APP ANTERIOR) ---
-        
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- SISTEMA DE TEMAS ---
         const THEMES = {
             azul: { id: 'azul', name: 'Azul Corporativo', colors: { bgApp: 'bg-slate-100', bgFull: 'bg-gradient-to-br from-blue-900 via-blue-700 to-indigo-900', bgCard: 'bg-white', textMain: 'text-slate-900', textSec: 'text-slate-500', border: 'border-slate-200', inputBg: 'bg-slate-50', primary: 'bg-blue-700 hover:bg-blue-800 text-white', accent: 'text-blue-700', cardShadow: 'shadow-blue-900/10' } },
             celeste: { id: 'celeste', name: 'Celeste Fresco', colors: { bgApp: 'bg-sky-50', bgFull: 'bg-gradient-to-tr from-sky-400 to-blue-500', bgCard: 'bg-white', textMain: 'text-sky-950', textSec: 'text-sky-600', border: 'border-sky-100', inputBg: 'bg-sky-50/30', primary: 'bg-sky-500 hover:bg-sky-600 text-white', accent: 'text-sky-600', cardShadow: 'shadow-sky-200/50' } },
@@ -71,25 +89,25 @@
 
         const Icons = {
             Fingerprint: () => <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.2-2.85.577-4.147l.313-.993m1.814 12.998a2.968 2.968 0 00-2.167 1.846m17.05-2.166a2.966 2.966 0 012.412 2.039M12 4.07a13.862 13.862 0 014.07 1.891m-8.135.004A13.862 13.862 0 0112 4.07M3 15.364c0 1.564.36 3.045 1 4.364m0 0c1.744-2.772 2.753-6.054 2.753-9.571 0-1.017-.07-2.019-.203-3m2.118 6.844A21.88 21.88 0 005.171 17" /></svg>,
-            Users: () => <svg className="w-8 h-8 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-            CheckCircle: () => <svg className="w-8 h-8 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-            Clock: () => <svg className="w-8 h-8 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-            Alert: () => <svg className="w-8 h-8 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
+            Users: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+            CheckCircle: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Clock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Alert: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
             Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
             Admin: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
-            Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+            Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
             Coffee: () => <svg className="w-6 h-6 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3" /></svg>,
             Map: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
         };
 
-        const LoadingScreen = () => (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50 font-sans">
-                <div className="flex flex-col items-center p-8 bg-white rounded-2xl shadow-lg">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
-                    <p className="text-gray-600 font-medium animate-pulse">Cargando sistema...</p>
+        const AppLogo = ({ url, className = "w-16 h-16" }) => {
+            if (url) return <img src={url} alt="Logo" className={`${className} object-contain rounded-xl bg-white p-1 shadow-sm`} />;
+            return (
+                <div className={`${className} bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl flex items-center justify-center shadow-2xl border border-white/20 text-white`}>
+                    <div className="w-2/3 h-2/3"><Icons.Fingerprint /></div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         const StatCard = ({ title, value, icon, color = 'blue', loading }) => {
             const gradients = {
@@ -101,30 +119,16 @@
             return (
                 <div className={`${gradients[color]} p-6 rounded-2xl shadow-lg text-white transition-transform transform hover:scale-105`}>
                     <div className="flex justify-between items-start">
-                        <div>
-                            <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-                            {loading ? <div className="h-8 w-24 bg-white/20 animate-pulse rounded mt-2"></div> : <h3 className="text-4xl font-extrabold">{value}</h3>}
-                        </div>
+                        <div><p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>{loading ? <div className="h-8 w-24 bg-white/20 animate-pulse rounded mt-2"></div> : <h3 className="text-4xl font-extrabold">{value}</h3>}</div>
                         <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm text-white">{icon}</div>
                     </div>
                 </div>
             );
         };
 
-        const AppLogo = ({ url, className = "w-16 h-16" }) => {
-            if (url) {
-                return <img src={url} alt="Logo" className={`${className} object-contain rounded-xl bg-white p-1 shadow-sm`} />;
-            }
-            return (
-                <div className={`${className} bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl flex items-center justify-center shadow-2xl border border-white/20 text-white`}>
-                    <div className="w-2/3 h-2/3"><Icons.Fingerprint /></div>
-                </div>
-            );
-        };
-
         const getUserLocation = () => new Promise((res, rej) => {
-            if (!navigator.geolocation) return rej(new Error("Geolocalización no soportada"));
-            navigator.geolocation.getCurrentPosition(p => res({ latitude: p.coords.latitude, longitude: p.coords.longitude }), e => rej(new Error(e.message)));
+            if (!navigator.geolocation) return rej(new Error("Activa el GPS"));
+            navigator.geolocation.getCurrentPosition(p => res({ latitude: p.coords.latitude, longitude: p.coords.longitude }), e => rej(new Error("Error GPS")));
         });
 
         const getHaversineDistance = (c1, c2) => {
@@ -134,481 +138,102 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         };
 
-        const parseShiftTime = (date, time) => {
-            if (!time) return new Date(date);
-            const [h, m] = time.split(':').map(Number);
-            const d = new Date(date); d.setHours(h, m, 0, 0); return d;
-        };
-
-        const LoginScreen = ({ db, appId, onLogin, globalConfig }) => {
-            const [employeeId, setEmployeeId] = useState('');
-            const [password, setPassword] = useState(''); 
-            const [error, setError] = useState(null); 
-            const [isLoading, setIsLoading] = useState(false); 
+        // --- PANTALLAS ---
+        const LoginScreen = ({ onLogin, globalConfig }) => {
+            const { getDoc, doc, updateDoc, db } = window.firebaseModules.methods;
+            const database = window.firebaseModules.db;
             
+            const [id, setId] = useState(''); const [pass, setPass] = useState(''); const [error, setError] = useState(null); const [loading, setLoading] = useState(false);
             const theme = THEMES[globalConfig.theme] || THEMES.azul;
             const { colors } = theme;
 
             const handleSubmit = async (e) => {
-                e.preventDefault();
-                setError(null); setIsLoading(true);
-                const { getDoc, doc, updateDoc } = window.firebase;
+                e.preventDefault(); setError(null); setLoading(true);
+                const trimId = id.trim(); const trimPass = pass.trim();
+                await new Promise(r => setTimeout(r, 500));
 
-                // Falso retardo para UX
-                await new Promise(res => setTimeout(res, 500)); 
-
-                const id = employeeId.trim();
-                const pass = password.trim();
-
-                if (id.toUpperCase() === 'LUMOS' && pass === 'Luna1309') {
-                    onLogin(id, true, "Master Admin"); return;
-                }
-
+                if (trimId.toUpperCase() === 'LUMOS' && trimPass === 'Luna1309') { onLogin(trimId, true, "Master Admin"); return; }
+                
                 try {
-                    const adminSnap = await getDoc(doc(db, `/artifacts/${appId}/public/data/admins`, id.toUpperCase()));
-                    if (adminSnap.exists() && adminSnap.data().password === pass) { onLogin(id, true, adminSnap.data().name); return; }
+                    const adminSnap = await getDoc(doc(database, `artifacts/lumos-assist-39e09/public/data/admins`, trimId.toUpperCase()));
+                    if (adminSnap.exists() && adminSnap.data().password === trimPass) { onLogin(trimId, true, adminSnap.data().name); return; }
 
-                    const empSnap = await getDoc(doc(db, `/artifacts/${appId}/public/data/employees`, id));
+                    const empRef = doc(database, `artifacts/lumos-assist-39e09/public/data/employees`, trimId);
+                    const empSnap = await getDoc(empRef);
+                    
                     if (empSnap.exists()) {
                         const data = empSnap.data();
-                        if (data.password !== pass) throw new Error("Contraseña incorrecta");
-                        if (!data.registeredDevice) await updateDoc(doc(db, `/artifacts/${appId}/public/data/employees`, id), { registeredDevice: navigator.userAgent });
+                        if (data.password !== trimPass) throw new Error("Contraseña incorrecta");
+                        if (!data.registeredDevice) await updateDoc(empRef, { registeredDevice: navigator.userAgent });
                         else if (data.registeredDevice !== navigator.userAgent) throw new Error("Dispositivo no reconocido");
-                        onLogin(id, false, data.name);
+                        onLogin(trimId, false, data.name);
                     } else throw new Error("Usuario no encontrado");
-                } catch (err) { setError(err.message); setIsLoading(false); }
+                } catch (err) { setError(err.message); setLoading(false); }
             };
 
             return (
-                <div className={`min-h-screen w-full flex items-center justify-center ${colors.bgFull} font-sans transition-all duration-500 relative p-4`}>
+                <div className={`min-h-screen w-full flex items-center justify-center ${colors.bgFull} font-sans relative p-4`}>
                     <div className="absolute inset-0 overflow-hidden">
                         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-white rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse"></div>
                         <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-white rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse"></div>
                     </div>
-
                     <div className={`relative w-full max-w-md p-8 rounded-3xl shadow-2xl ${colors.bgCard} ${colors.cardShadow} border ${colors.border} backdrop-blur-sm`}>
                         <div className="text-center mb-8">
-                            <div className="flex justify-center mb-6">
-                                <AppLogo url={globalConfig.logoUrl} className="w-24 h-24" />
-                            </div>
+                            <div className="flex justify-center mb-6"><AppLogo url={globalConfig.logoUrl} className="w-24 h-24" /></div>
                             <h2 className={`text-3xl font-extrabold ${colors.textMain} tracking-tight`}>Lumos Assist</h2>
-                            <p className={`${colors.textSec} mt-2 text-sm`}>Plataforma de Gestión de Asistencia</p>
+                            <p className={`text-sm mt-2 ${colors.textSec}`}>Plataforma de Gestión de Asistencia</p>
                         </div>
-
                         <form onSubmit={handleSubmit} className="space-y-6">
-                            <div>
-                                <label className={`block text-sm font-bold ${colors.textMain} mb-2 ml-1`}>ID de Usuario</label>
-                                <input type="text" value={employeeId} onChange={e => setEmployeeId(e.target.value)} className={`w-full px-5 py-4 rounded-xl ${colors.inputBg} border ${colors.border} focus:ring-2 focus:ring-blue-500/50 outline-none ${colors.textMain} font-medium transition-all`} placeholder='Ej: 12345' disabled={isLoading} />
-                            </div>
-                            <div>
-                                <label className={`block text-sm font-bold ${colors.textMain} mb-2 ml-1`}>Contraseña</label>
-                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={`w-full px-5 py-4 rounded-xl ${colors.inputBg} border ${colors.border} focus:ring-2 focus:ring-blue-500/50 outline-none ${colors.textMain} font-medium transition-all`} placeholder="••••••••" disabled={isLoading} />
-                            </div>
-                            
-                            {error && (
-                                <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm flex items-center gap-3 border border-red-100 animate-pulse">
-                                    <Icons.Alert /> <span className="font-medium">{error}</span>
-                                </div>
-                            )}
-
-                            <button type="submit" className={`w-full ${colors.primary} font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-70 transform active:scale-[0.98]`}>
-                                {isLoading ? 'Verificando...' : 'Iniciar Sesión'}
-                            </button>
+                            <input value={id} onChange={e=>setId(e.target.value)} className={`w-full px-5 py-4 rounded-xl ${colors.inputBg} border ${colors.border} ${colors.textMain} outline-none focus:ring-2 focus:ring-blue-500`} placeholder="ID Usuario" />
+                            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} className={`w-full px-5 py-4 rounded-xl ${colors.inputBg} border ${colors.border} ${colors.textMain} outline-none focus:ring-2 focus:ring-blue-500`} placeholder="Contraseña" />
+                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-center text-sm font-bold">{error}</div>}
+                            <button className={`w-full ${colors.primary} font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95`}>{loading ? '...' : 'Entrar'}</button>
                         </form>
-                        
-                        <div className="mt-8 text-center">
-                            <p className={`${colors.textSec} text-xs opacity-60`}>© 2025 Lumos Assist System</p>
-                        </div>
+                        <p className={`text-center mt-6 text-xs ${colors.textSec}`}>© 2025 Lumos Assist</p>
                     </div>
                 </div>
             );
         };
 
-        const AdminDashboard = ({ db, appId, onLogout, userId, currentAdminName, globalConfig }) => {
-            const { collection, addDoc, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, updateDoc } = window.firebase;
-            
-            const theme = THEMES[globalConfig.theme] || THEMES.azul;
-            const { colors } = theme;
+        // --- DASHBOARD ADMIN ---
+        const AdminDashboard = ({ onLogout, userId, currentAdminName, globalConfig }) => {
+            const { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } = window.firebaseModules.methods;
+            const database = window.firebaseModules.db;
+            const { colors } = THEMES[globalConfig.theme] || THEMES.azul;
             const customStyle = globalConfig.textColor ? { color: globalConfig.textColor } : {};
 
             const [allLogs, setAllLogs] = useState([]);
             const [employees, setEmployees] = useState([]);
             const [zones, setZones] = useState([]);
             const [adminsList, setAdminsList] = useState([]);
-            const [blockOutOfFence, setBlockOutOfFence] = useState(false);
-            
-            const [isLoadingData, setIsLoadingData] = useState(true);
-            
-            const [newEmployee, setNewEmployee] = useState({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart: '', lunchEnd: '' });
-            const [editingEmpId, setEditingEmpId] = useState(null);
+            const [blockOut, setBlockOut] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [empForm, setEmpForm] = useState({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart: '', lunchEnd: '' });
+            const [editEmpId, setEditEmpId] = useState(null);
             const [zoneForm, setZoneForm] = useState({ name: '', lat: '', lon: '', rad: '150' });
-            const [editingZoneId, setEditingZoneId] = useState(null);
             const [newAdmin, setNewAdmin] = useState({ id: '', name: '', pass: '' });
+            const [configForm, setConfigForm] = useState({ theme: 'azul', logoUrl: '', textColor: '' });
+            const [filters, setFilters] = useState({ start: new Date().toISOString().split('T')[0], end: new Date().toISOString().split('T')[0], startTime: '', endTime: '' });
+            const [report, setReport] = useState([]);
 
-            const [tempLogoUrl, setTempLogoUrl] = useState(globalConfig.logoUrl || '');
-            const [selectedTheme, setSelectedTheme] = useState(globalConfig.theme || 'azul');
-            const [selectedTextColor, setSelectedTextColor] = useState(globalConfig.textColor || '');
-            const [isSavingConfig, setIsSavingConfig] = useState(false);
-
-            const [reportFilters, setReportFilters] = useState({ start: new Date().toISOString().split('T')[0], end: new Date().toISOString().split('T')[0], startTime: '', endTime: '' });
-            const [selectedUsers, setSelectedUsers] = useState([]);
-            const [selectedTypes, setSelectedTypes] = useState([]); 
-            const [generatedReport, setGeneratedReport] = useState([]);
-            const [isGenerating, setIsGenerating] = useState(false);
-
-            const [error, setError] = useState(null);
-            const [success, setSuccess] = useState(null);
+            const appId = "lumos-assist-39e09";
 
             useEffect(() => {
-                if (!userId) return;
-                const unsubLogs = onSnapshot(query(collection(db, `/artifacts/${appId}/public/data/attendance_logs`)), (snap) => {
-                    setAllLogs(snap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate() || new Date() })).sort((a, b) => b.timestamp - a.timestamp));
-                });
-                const unsubEmps = onSnapshot(collection(db, `/artifacts/${appId}/public/data/employees`), (snap) => {
-                    setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.id.localeCompare(b.id)));
-                });
-                const unsubAdmins = onSnapshot(collection(db, `/artifacts/${appId}/public/data/admins`), (snap) => {
-                    setAdminsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                });
-                const unsubSettings = onSnapshot(doc(db, `/artifacts/${appId}/public/data/settings`, "geofence"), (snap) => {
-                    if (snap.exists()) {
-                        setZones(snap.data().zones || []);
-                        setBlockOutOfFence(snap.data().blockOutOfFence || false);
-                    }
-                });
-                setIsLoadingData(false);
-                return () => { unsubLogs(); unsubEmps(); unsubSettings(); unsubAdmins(); };
+                if(!userId) return;
+                const u1 = onSnapshot(query(collection(database, `artifacts/${appId}/public/data/attendance_logs`)), s => setAllLogs(s.docs.map(d => ({id:d.id, ...d.data(), timestamp:d.data().timestamp.toDate()})).sort((a,b)=>b.timestamp-a.timestamp)));
+                const u2 = onSnapshot(collection(database, `artifacts/${appId}/public/data/employees`), s => setEmployees(s.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b)=>a.id.localeCompare(b.id))));
+                const u3 = onSnapshot(collection(database, `artifacts/${appId}/public/data/admins`), s => setAdminsList(s.docs.map(d => ({id:d.id, ...d.data()}))));
+                const u4 = onSnapshot(doc(database, `artifacts/${appId}/public/data/settings`, "geofence"), s => { if(s.exists()) { setZones(s.data().zones||[]); setBlockOut(s.data().blockOutOfFence||false); }});
+                const u5 = onSnapshot(doc(database, `artifacts/${appId}/public/data/settings`, "config"), s => { if(s.exists()) setConfigForm(s.data()); setLoading(false); });
+                return () => { u1(); u2(); u3(); u4(); u5(); };
             }, [userId]);
 
-            const stats = useMemo(() => {
-                const todayStr = new Date().toDateString();
-                const todayLogs = allLogs.filter(l => l.timestamp.toDateString() === todayStr);
-                const empMap = new Map(employees.map(e => [e.id, e]));
-                let lateCount = 0; const processed = new Set();
-                todayLogs.forEach(log => {
-                    if (log.type === 'in' && !processed.has(log.employeeId)) {
-                        processed.add(log.employeeId);
-                        const emp = empMap.get(log.employeeId);
-                        if (emp?.shiftStart) {
-                            const limit = parseShiftTime(log.timestamp, emp.shiftStart);
-                            limit.setMinutes(limit.getMinutes() + 5);
-                            if (log.timestamp > limit) lateCount++;
-                        }
-                    }
-                });
-                return { total: employees.length, logsToday: todayLogs.length, active: processed.size, late: lateCount };
-            }, [allLogs, employees]);
-
-            const handleSaveConfig = async () => {
-                setIsSavingConfig(true); setSuccess(null); setError(null);
-                try {
-                    await setDoc(doc(db, `/artifacts/${appId}/public/data/settings`, "config"), { 
-                        theme: selectedTheme, 
-                        logoUrl: tempLogoUrl,
-                        textColor: selectedTextColor
-                    }, { merge: true });
-                    setSuccess("Configuración guardada.");
-                } catch (err) { setError("Error al guardar configuración."); }
-                setIsSavingConfig(false);
-            };
-
-            const handleSaveEmployee = async (e) => {
-                e.preventDefault(); setError(null); setSuccess(null);
-                if (!newEmployee.name || !newEmployee.dept) return setError("Faltan campos básicos");
-                try {
-                    const path = `/artifacts/${appId}/public/data/employees`;
-                    const data = { name: newEmployee.name, department: newEmployee.dept, shiftStart: newEmployee.shiftStart, shiftEnd: newEmployee.shiftEnd, lunchStart: newEmployee.lunchStart, lunchEnd: newEmployee.lunchEnd };
-                    if (newEmployee.pass) data.password = newEmployee.pass;
-                    if (editingEmpId) { await updateDoc(doc(db, path, editingEmpId), data); setSuccess("Empleado actualizado"); }
-                    else {
-                        if (!newEmployee.id || !newEmployee.pass) return setError("Falta ID o Pass");
-                        await setDoc(doc(db, path, newEmployee.id), { ...data, createdAt: serverTimestamp(), registeredDevice: null });
-                        setSuccess("Empleado creado");
-                    }
-                    setNewEmployee({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart: '', lunchEnd: '' }); setEditingEmpId(null);
-                } catch (err) { setError("Error guardando empleado"); }
-            };
-            const handleDeleteEmp = async (id) => { if(confirm("¿Borrar?")) deleteDoc(doc(db, `/artifacts/${appId}/public/data/employees`, id)); };
-            const handleResetDevice = async (id) => { if(confirm("¿Resetear?")) updateDoc(doc(db, `/artifacts/${appId}/public/data/employees`, id), { registeredDevice: null }); };
-            const handleSaveAdmin = async (e) => { e.preventDefault(); try { await setDoc(doc(db, `/artifacts/${appId}/public/data/admins`, newAdmin.id.toUpperCase()), { name: newAdmin.name, password: newAdmin.pass, createdAt: serverTimestamp() }); setNewAdmin({id:'',name:'',pass:''}); setSuccess("Admin creado"); } catch (err) { setError("Error"); } };
-            const handleDeleteAdmin = async (id) => { if(confirm("¿Borrar?")) deleteDoc(doc(db, `/artifacts/${appId}/public/data/admins`, id)); };
-            const handleSaveZone = async (e) => { e.preventDefault(); const newData = { name: zoneForm.name, latitude: parseFloat(zoneForm.lat), longitude: parseFloat(zoneForm.lon), radius: parseInt(zoneForm.rad) }; let newZones = [...zones]; if (editingZoneId) newZones = newZones.map(z => z.id === editingZoneId ? { ...newData, id: z.id } : z); else newZones.push({ ...newData, id: crypto.randomUUID() }); await setDoc(doc(db, `/artifacts/${appId}/public/data/settings`, "geofence"), { zones: newZones, blockOutOfFence }, { merge: true }); setZoneForm({ name: '', lat: '', lon: '', rad: '150' }); setEditingZoneId(null); };
-            const handleDeleteZone = async (id) => { const newZones = zones.filter(z => z.id !== id); await setDoc(doc(db, `/artifacts/${appId}/public/data/settings`, "geofence"), { zones: newZones, blockOutOfFence }, { merge: true }); };
-            const handleUseLocation = async () => { try { const loc = await getUserLocation(); setZoneForm(p => ({ ...p, lat: loc.latitude.toFixed(6), lon: loc.longitude.toFixed(6) })); } catch (err) { setError(err.message); } };
-
-            const handleGenerateReport = () => {
-                setIsGenerating(true);
-                const start = new Date(reportFilters.start); start.setHours(0,0,0,0);
-                const end = new Date(reportFilters.end); end.setHours(23,59,59,999);
-                let logs = allLogs.filter(l => l.timestamp >= start && l.timestamp <= end);
-                if (reportFilters.startTime && reportFilters.endTime) {
-                    const [sh, sm] = reportFilters.startTime.split(':'); const [eh, em] = reportFilters.endTime.split(':');
-                    logs = logs.filter(l => {
-                        const m = l.timestamp.getHours() * 60 + l.timestamp.getMinutes();
-                        return m >= (sh*60 + +sm) && m <= (eh*60 + +em);
-                    });
-                }
-                if (selectedUsers.length > 0) logs = logs.filter(l => selectedUsers.includes(l.employeeId));
-                if (selectedTypes.length > 0) logs = logs.filter(l => selectedTypes.includes(l.type));
-                const report = logs.map(l => {
-                    const emp = employees.find(e => e.id === l.employeeId);
-                    return { id: l.id, employeeId: l.employeeId, name: emp?.name || 'Desconocido', dept: emp?.department || 'N/A', date: l.timestamp.toLocaleDateString(), time: l.timestamp.toLocaleTimeString(), type: l.type, typeLabel: l.type === 'in' ? 'Entrada' : l.type === 'out' ? 'Salida' : l.type === 'break-out' ? 'Inicio Comida' : 'Fin Comida', isOutOfFence: l.isOutOfFence };
-                });
-                report.sort((a, b) => new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time));
-                setGeneratedReport(report); setIsGenerating(false);
-            };
+            const saveConfig = async () => { await setDoc(doc(database, `artifacts/${appId}/public/data/settings`, "config"), configForm, { merge: true }); alert("Guardado"); };
             
-            const handleExport = () => {
-                if (!generatedReport.length) return;
-                let csv = "ID,Nombre,Depto,Fecha,Hora,Tipo,Ubicacion\n";
-                generatedReport.forEach(r => { csv += `"${r.employeeId}","${r.name}","${r.dept}","${r.date}","${r.time}","${r.typeLabel}","${r.isOutOfFence ? 'Fuera de Zona' : 'En Zona'}"\n`; });
-                const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + csv); link.download = "reporte_avanzado.csv"; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            };
-
-            return (
-                <div className={`min-h-screen ${colors.bgApp} p-4 md:p-8 font-sans transition-colors duration-500`}>
-                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        <div className="lg:col-span-4 flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                            <div className="flex items-center gap-4">
-                                <AppLogo url={globalConfig.logoUrl} className="w-12 h-12" />
-                                <div><h1 className={`text-3xl font-bold ${colors.textMain}`} style={customStyle}>Panel RH</h1><p className={colors.textSec} style={customStyle}>Hola, {currentAdminName}</p></div>
-                            </div>
-                            <button onClick={onLogout} className={`px-4 py-2 rounded-lg border ${colors.border} ${colors.textMain} hover:bg-red-50 hover:text-red-600 font-bold transition`}>Salir</button>
-                        </div>
-
-                        {(error || success) && <div className={`lg:col-span-4 p-4 rounded-xl font-medium text-center ${error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{error || success}</div>}
-
-                        <div className="lg:col-span-3 space-y-8">
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                                <StatCard title="Empleados" value={employees.length} icon={<Icons.Users />} color="blue" loading={isLoadingData} />
-                                <StatCard title="Registros Hoy" value={stats.logsToday} icon={<Icons.CheckCircle />} color="green" loading={isLoadingData} />
-                                <StatCard title="Activos Ahora" value={stats.active} icon={<Icons.Clock />} color="purple" loading={isLoadingData} />
-                                <StatCard title="Retardos Hoy" value={stats.late} icon={<Icons.Alert />} color="red" loading={isLoadingData} />
-                            </div>
-
-                            <div className={`${colors.bgCard} p-6 rounded-2xl shadow-sm border ${colors.border}`}>
-                                <h3 className={`text-xl font-bold ${colors.textMain} mb-4 flex items-center gap-2`} style={customStyle}><Icons.Settings /> Configuración Visual</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div>
-                                        <label className={`text-xs font-bold uppercase ${colors.textSec} mb-2 block`}>Tema de Color</label>
-                                        <div className="flex gap-2 flex-wrap">
-                                            {Object.values(THEMES).map(t => (
-                                                <button key={t.id} onClick={()=>setSelectedTheme(t.id)} className={`px-3 py-1 rounded border text-xs font-bold transition hover:scale-105 ${t.id==='oscuro'?'bg-black text-white': t.id==='blanco'?'bg-white text-black border-gray-300':'bg-white text-gray-800'} ${selectedTheme===t.id?'ring-2 ring-blue-500 border-blue-500':''}`}>{t.name}</button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className={`text-xs font-bold uppercase ${colors.textSec} mb-2 block`}>Logo URL</label>
-                                        <input value={tempLogoUrl} onChange={e=>setTempLogoUrl(e.target.value)} className={`w-full border rounded p-2 text-sm ${colors.inputBg} ${colors.textMain}`} placeholder="https://..." />
-                                    </div>
-                                    <div>
-                                        <label className={`text-xs font-bold uppercase ${colors.textSec} mb-2 block`}>Color Texto Principal</label>
-                                        <div className="flex gap-2 items-center">
-                                            <input type="color" value={selectedTextColor || '#000000'} onChange={e=>setSelectedTextColor(e.target.value)} className="h-9 w-16 cursor-pointer border rounded p-1 bg-white" />
-                                            <button onClick={()=>setSelectedTextColor('')} className={`text-xs ${colors.textSec} underline`}>Restaurar</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-6 text-right"><button onClick={handleSaveConfig} className="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-black transition">Guardar Cambios</button></div>
-                            </div>
-
-                            <div className={`${colors.bgCard} p-6 rounded-2xl shadow-sm border ${colors.border}`}>
-                                <h3 className={`text-xl font-bold ${colors.textMain} mb-4 flex items-center gap-2`} style={customStyle}><Icons.Admin /> Administradores del Sistema</h3>
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <div className={`lg:col-span-1 ${colors.inputBg} p-6 rounded-xl border ${colors.border}`}>
-                                        <h3 className={`text-sm font-bold ${colors.textMain} uppercase mb-4`}>Crear Nuevo Admin</h3>
-                                        <form onSubmit={handleSaveAdmin} className="space-y-4">
-                                            <input className={`w-full border ${colors.border} p-3 rounded-lg ${colors.bgCard} ${colors.textMain}`} placeholder="Usuario" value={newAdmin.id} onChange={e => setNewAdmin({...newAdmin, id: e.target.value.toUpperCase().replace(/\s/g,'')})} />
-                                            <input className={`w-full border ${colors.border} p-3 rounded-lg ${colors.bgCard} ${colors.textMain}`} placeholder="Nombre" value={newAdmin.name} onChange={e => setNewAdmin({...newAdmin, name: e.target.value})} />
-                                            <input className={`w-full border ${colors.border} p-3 rounded-lg ${colors.bgCard} ${colors.textMain}`} type="password" placeholder="Contraseña" value={newAdmin.pass} onChange={e => setNewAdmin({...newAdmin, pass: e.target.value})} />
-                                            <button className={`w-full ${colors.primary} font-bold py-3 rounded-lg`}>Añadir Administrador</button>
-                                        </form>
-                                    </div>
-                                    <div className="lg:col-span-2">
-                                        <h3 className={`text-sm font-bold ${colors.textSec} uppercase mb-4`}>Admins Existentes</h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-64 overflow-y-auto pr-2">
-                                            <div className={`p-4 border ${colors.border} rounded-xl ${colors.inputBg} flex justify-between items-center opacity-70 select-none`}>
-                                                <div className="flex items-center gap-3"><div className="bg-gray-200 p-2 rounded-full"><Icons.Admin /></div><div><span className={`block font-bold ${colors.textMain}`}>LumOs</span><span className={`text-xs ${colors.textSec}`}>Master Admin</span></div></div>
-                                                <span className="text-[10px] bg-gray-200 px-2 py-1 rounded uppercase font-bold tracking-wider text-gray-600">Sistema</span>
-                                            </div>
-                                            {adminsList.map(admin => (
-                                                <div key={admin.id} className={`p-4 border ${colors.border} rounded-xl flex justify-between items-center hover:shadow-md transition ${colors.bgCard}`}>
-                                                    <div className="flex items-center gap-3"><div className={`bg-blue-100 text-blue-600 p-2 rounded-full`}><Icons.Admin /></div><div><span className={`block font-bold ${colors.textMain}`}>{admin.id}</span><span className={`text-xs ${colors.textSec}`}>{admin.name}</span></div></div>
-                                                    <button onClick={() => handleDeleteAdmin(admin.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition" title="Eliminar"><Icons.Logout /></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className={`${colors.bgCard} p-6 rounded-2xl shadow-sm border ${colors.border}`}>
-                                <h3 className={`text-xl font-bold ${colors.textMain} mb-4 flex items-center gap-2`} style={customStyle}><Icons.Users /> Gestión de Empleados</h3>
-                                <form onSubmit={handleSaveEmployee} className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                                    <input value={newEmployee.id} onChange={e=>setNewEmployee({...newEmployee, id:e.target.value})} placeholder="ID" className={`p-2 border rounded ${colors.inputBg} ${colors.textMain}`} disabled={!!editingEmpId} />
-                                    <input value={newEmployee.name} onChange={e=>setNewEmployee({...newEmployee, name:e.target.value})} placeholder="Nombre" className={`p-2 border rounded ${colors.inputBg} ${colors.textMain}`} />
-                                    <input value={newEmployee.dept} onChange={e=>setNewEmployee({...newEmployee, dept:e.target.value})} placeholder="Depto" className={`p-2 border rounded ${colors.inputBg} ${colors.textMain}`} />
-                                    <input type="password" value={newEmployee.pass} onChange={e=>setNewEmployee({...newEmployee, pass:e.target.value})} placeholder="Contraseña" className={`p-2 border rounded ${colors.inputBg} ${colors.textMain}`} />
-                                    <div className="col-span-2 flex gap-2 items-center bg-gray-100 dark:bg-gray-700 p-2 rounded"><span className={`text-xs font-bold ${colors.textSec} w-16`}>TURNO:</span><input type="time" value={newEmployee.shiftStart} onChange={e=>setNewEmployee({...newEmployee, shiftStart:e.target.value})} className="border rounded p-1 flex-1 bg-gray-700 text-white font-medium" /><input type="time" value={newEmployee.shiftEnd} onChange={e=>setNewEmployee({...newEmployee, shiftEnd:e.target.value})} className="border rounded p-1 flex-1 bg-gray-700 text-white font-medium" /></div>
-                                    <div className="col-span-2 flex gap-2 items-center bg-gray-100 dark:bg-gray-700 p-2 rounded"><span className={`text-xs font-bold ${colors.textSec} w-16`}>COMIDA:</span><input type="time" value={newEmployee.lunchStart} onChange={e=>setNewEmployee({...newEmployee, lunchStart:e.target.value})} className="border rounded p-1 flex-1 bg-gray-700 text-white font-medium" /><input type="time" value={newEmployee.lunchEnd} onChange={e=>setNewEmployee({...newEmployee, lunchEnd:e.target.value})} className="border rounded p-1 flex-1 bg-gray-700 text-white font-medium" /></div>
-                                    <div className="col-span-4 flex gap-2"><button className={`flex-1 ${colors.primary} py-2 rounded font-bold`}>Guardar</button>{editingEmpId && <button type="button" onClick={()=>{setEditingEmpId(null); setNewEmployee({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart: '', lunchEnd: '' })}} className="bg-gray-200 text-gray-600 px-4 rounded font-bold">Cancelar</button>}</div>
-                                </form>
-                                <div className="max-h-60 overflow-y-auto"><table className="w-full text-sm text-left"><thead className={`opacity-70 ${colors.textSec}`}><tr><th>ID</th><th>Nombre</th><th>Turno</th><th>Comida</th><th>Acción</th></tr></thead><tbody className={colors.textMain}>{employees.map(e => (<tr key={e.id} className="border-b hover:bg-black/5"><td className="p-2 font-mono">{e.id}</td><td className="p-2">{e.name}</td><td className="p-2 text-xs">{e.shiftStart}-{e.shiftEnd}</td><td className="p-2 text-xs">{e.lunchStart}-{e.lunchEnd}</td><td className="p-2"><button onClick={()=>{setEditingEmpId(e.id); setNewEmployee({...e, pass:''})}} className={`${colors.accent} font-bold`}>Edit</button></td></tr>))}</tbody></table></div>
-                            </div>
-
-                            <div className={`${colors.bgCard} p-6 rounded-2xl shadow-sm border ${colors.border}`}>
-                                <h3 className={`text-xl font-bold ${colors.textMain} mb-4`} style={customStyle}>Reportes Avanzados</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                    <div className="space-y-2">
-                                        <label className={`text-xs font-bold uppercase ${colors.textSec}`}>Filtros de Tiempo</label>
-                                        <div className="flex gap-2"><input type="date" value={reportFilters.start} onChange={e=>setReportFilters({...reportFilters, start:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-medium border-gray-600" /><input type="date" value={reportFilters.end} onChange={e=>setReportFilters({...reportFilters, end:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-medium border-gray-600" /></div>
-                                        <div className="flex gap-2"><input type="time" value={reportFilters.startTime} onChange={e=>setReportFilters({...reportFilters, startTime:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-medium border-gray-600" /><input type="time" value={reportFilters.endTime} onChange={e=>setReportFilters({...reportFilters, endTime:e.target.value})} className="border p-2 rounded flex-1 bg-gray-700 text-white font-medium border-gray-600" /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="border p-2 rounded max-h-32 overflow-y-auto bg-white border-gray-200"><div className="text-xs font-bold mb-1 sticky top-0 bg-white text-gray-900">Usuarios</div><label className="block text-xs hover:bg-gray-100 p-1 cursor-pointer text-gray-800"><input type="checkbox" className="mr-1" onChange={e=>setSelectedUsers(e.target.checked ? employees.map(em=>em.id) : [])} /> Todos</label>{employees.map(e => (<label key={e.id} className="block text-xs hover:bg-gray-100 p-1 cursor-pointer text-gray-800"><input type="checkbox" className="mr-1" checked={selectedUsers.includes(e.id)} onChange={ev=>{if(ev.target.checked) setSelectedUsers([...selectedUsers, e.id]); else setSelectedUsers(selectedUsers.filter(id=>id!==e.id))}} /> {e.name}</label>))}</div>
-                                        <div className="border p-2 rounded bg-white border-gray-200"><div className="text-xs font-bold mb-1 text-gray-900">Tipos</div>{[{id: 'in', label: 'Entrada'}, {id: 'out', label: 'Salida'}, {id: 'break-out', label: 'Inicio Comida'}, {id: 'break-in', label: 'Fin Comida'}].map(t => (<label key={t.id} className="block text-xs hover:bg-gray-100 p-1 cursor-pointer text-gray-800"><input type="checkbox" className="mr-1" checked={selectedTypes.includes(t.id)} onChange={ev=>{if(ev.target.checked) setSelectedTypes([...selectedTypes, t.id]); else setSelectedTypes(selectedTypes.filter(x=>x!==t.id))}} /> {t.label}</label>))}</div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2"><button onClick={handleGenerateReport} disabled={isGenerating} className={`flex-1 ${colors.primary} py-3 rounded-xl font-bold shadow-lg disabled:opacity-50`}>{isGenerating ? 'Procesando...' : 'Generar Reporte'}</button><button onClick={handleExport} disabled={!generatedReport.length} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Descargar CSV</button></div>
-                                {generatedReport.length > 0 && (<div className={`mt-6 overflow-x-auto border rounded-lg ${colors.border}`}><table className="w-full text-xs text-left"><thead className={`bg-gray-100 dark:bg-gray-800 uppercase font-bold ${colors.textSec}`}><tr><th className="p-2">Nombre</th><th className="p-2">Fecha</th><th className="p-2">Hora</th><th className="p-2">Tipo</th><th className="p-2">Ubicación</th></tr></thead><tbody className={`divide-y ${colors.border}`}>{generatedReport.map((r,i) => (<tr key={i} className="hover:bg-black/5"><td className={`p-2 font-bold ${colors.textMain}`}>{r.name}</td><td className={`p-2 ${colors.textMain}`}>{r.date}</td><td className={`p-2 font-mono ${colors.textMain}`}>{r.time}</td><td className="p-2"><span className={`px-2 py-1 rounded text-white font-bold text-[10px] ${r.type==='in'?'bg-green-500':r.type==='out'?'bg-red-500':'bg-purple-500'}`}>{r.typeLabel}</span></td><td className={`p-2 ${colors.textMain}`}>{r.isOutOfFence ? '❌ Fuera' : '✅ En Sitio'}</td></tr>))}</tbody></table></div>)}
-                            </div>
-                        </div>
-
-                        <div className="lg:col-span-1 space-y-6">
-                            <div className={`${colors.bgCard} p-4 rounded-2xl shadow-sm border ${colors.border} h-[85vh] flex flex-col sticky top-4`}>
-                                <h3 className={`text-lg font-bold ${colors.textMain} mb-4 flex items-center gap-2`} style={customStyle}><span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span> Actividad en Vivo</h3>
-                                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                                    {allLogs.length === 0 ? <p className={`text-center ${colors.textSec} text-sm mt-10`}>Esperando checadas...</p> : allLogs.slice(0, 30).map(log => {
-                                        const emp = employees.find(e => e.id === log.employeeId);
-                                        return (
-                                            <div key={log.id} className={`p-3 rounded-xl border ${colors.border} shadow-sm hover:shadow-md transition ${colors.inputBg}`}>
-                                                <div className="flex justify-between items-start mb-1"><span className={`font-bold text-sm truncate w-2/3 ${colors.textMain}`}>{emp?.name || log.employeeId}</span><span className={`text-[10px] ${colors.textSec}`}>{log.timestamp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span></div>
-                                                <div className="flex justify-between items-center"><span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${log.type==='in'?'bg-green-100 text-green-700':log.type==='out'?'bg-red-100 text-red-700':'bg-purple-100 text-purple-700'}`}>{log.type==='in'?'Entrada':log.type==='out'?'Salida':log.type==='break-out'?'Inicio Comida':'Fin Comida'}</span>{log.location && <a href={`https://maps.google.com/?q=${log.location.latitude},${log.location.longitude}`} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-xs flex items-center gap-1"><Icons.Clock /> Mapa</a>}</div>
-                                                {log.isOutOfFence && <div className="mt-1 text-[10px] text-red-600 font-bold flex items-center gap-1 bg-red-50 p-1 rounded"><Icons.Alert /> Fuera de Zona</div>}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const EmployeeScreen = ({ db, appId, onLogout, employeeData, globalConfig }) => {
-            const { collection, addDoc, query, where, onSnapshot, getDoc, doc } = window.firebase;
-            const theme = THEMES[globalConfig.theme] || THEMES.azul;
-            const { colors } = theme;
-            const [logs, setLogs] = useState([]);
-            const [isSubmitting, setIsSubmitting] = useState(false);
-            const [error, setError] = useState(null);
-
-            useEffect(() => {
-                const q = query(collection(db, `/artifacts/${appId}/public/data/attendance_logs`), where("employeeId", "==", employeeData.id));
-                return onSnapshot(q, (s) => setLogs(s.docs.map(d => ({id:d.id, ...d.data(), timestamp:d.data().timestamp.toDate()})).sort((a,b) => b.timestamp - a.timestamp)));
-            }, [employeeData]);
-
-            const handleClock = async (type) => {
-                setIsSubmitting(true); setError(null);
-                try {
-                    const loc = await getUserLocation();
-                    const settings = await getDoc(doc(db, `/artifacts/${appId}/public/data/settings`, "geofence"));
-                    let isOutOfFence = false;
-                    if(settings.exists() && settings.data().zones?.length > 0) {
-                        const inside = settings.data().zones.some(z => getHaversineDistance(loc, z) <= z.radius);
-                        if(!inside) { if(settings.data().blockOutOfFence) throw new Error("Fuera de zona permitida."); isOutOfFence = true; }
-                    }
-                    await addDoc(collection(db, `/artifacts/${appId}/public/data/attendance_logs`), {
-                        employeeId: employeeData.id, type, timestamp: serverTimestamp(), location: loc, isOutOfFence, userAgent: navigator.userAgent
-                    });
-                } catch (e) { setError(e.message); }
-                setIsSubmitting(false);
-            };
-
-            const lastLog = logs[0]?.type;
-
-            return (
-                <div className={`min-h-screen ${colors.bgApp} flex items-center justify-center p-4 transition-colors duration-500`}>
-                    <div className={`w-full max-w-md ${colors.bgCard} rounded-3xl shadow-xl overflow-hidden border ${colors.border}`}>
-                        <div className={`bg-gradient-to-r ${colors.gradient} p-8 text-white text-center relative`}>
-                            <div className="flex justify-center mb-4"><AppLogo url={globalConfig.logoUrl} className="w-20 h-20" /></div>
-                            <h1 className="text-2xl font-bold">{employeeData.name}</h1>
-                            <p className="opacity-80 text-sm">{employeeData.department}</p>
-                            {employeeData.lunchStart && <div className="mt-2 text-xs bg-white/20 inline-block px-3 py-1 rounded-full">🍽️ Comida: {employeeData.lunchStart} - {employeeData.lunchEnd}</div>}
-                        </div>
-                        <div className="p-8 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => handleClock('in')} disabled={isSubmitting || lastLog === 'in' || lastLog === 'break-out'} className="bg-green-500 hover:bg-green-600 disabled:bg-gray-200 text-white py-4 rounded-xl font-bold shadow-lg transition transform active:scale-95 flex flex-col items-center"><Icons.CheckCircle /> Entrada</button>
-                                <button onClick={() => handleClock('out')} disabled={isSubmitting || (lastLog !== 'in' && lastLog !== 'break-in')} className="bg-red-500 hover:bg-red-600 disabled:bg-gray-200 text-white py-4 rounded-xl font-bold shadow-lg transition transform active:scale-95 flex flex-col items-center"><Icons.Logout /> Salida</button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => handleClock('break-out')} disabled={isSubmitting || lastLog !== 'in'} className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-200 text-white py-3 rounded-xl font-bold shadow-md transition transform active:scale-95 text-sm flex flex-col items-center"><Icons.Coffee /> Inicio Comida</button>
-                                <button onClick={() => handleClock('break-in')} disabled={isSubmitting || lastLog !== 'break-out'} className="bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-200 text-white py-3 rounded-xl font-bold shadow-md transition transform active:scale-95 text-sm flex flex-col items-center"><Icons.Clock /> Fin Comida</button>
-                            </div>
-                            
-                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-center text-sm">{error}</div>}
-
-                            <div className="mt-6">
-                                <h3 className={`text-xs font-bold ${colors.textSec} uppercase mb-3`}>Historial Hoy</h3>
-                                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                                    {logs.filter(l => l.timestamp.toDateString() === new Date().toDateString()).map(log => (
-                                        <div key={log.id} className={`flex justify-between p-3 rounded-lg border ${colors.border} ${colors.inputBg}`}>
-                                            <span className={`text-xs font-bold ${log.type.includes('in') ? 'text-green-600' : log.type.includes('out') ? (log.type==='break-out'?'text-purple-600':'text-red-600') : ''}`}>
-                                                {log.type==='in'?'ENTRADA':log.type==='out'?'SALIDA':log.type==='break-out'?'INICIO COMIDA':'FIN COMIDA'}
-                                            </span>
-                                            <span className={`text-xs ${colors.textSec} font-mono`}>{log.timestamp.toLocaleTimeString()}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                        <button onClick={onLogout} className={`w-full p-4 ${colors.inputBg} text-gray-500 text-sm hover:opacity-80 font-medium`}>Cerrar Sesión</button>
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            const { getAuth, onAuthStateChanged, signInAnonymously } = window.firebase;
-            const [userId, setUserId] = useState(null);
-            const [isAuthReady, setIsAuthReady] = useState(false);
-            const [isAdmin, setIsAdmin] = useState(false);
-            const [employeeData, setEmployeeData] = useState(null);
-            const [adminName, setAdminName] = useState('');
-            const [config, setConfig] = useState({ theme: 'azul', logoUrl: '', textColor: '' });
-
-            useEffect(() => {
-                // Autenticación anónima inicial para conectar a Firebase
-                const unsub = onAuthStateChanged(auth, (user) => {
-                    if (user) { setUserId(user.uid); setIsAuthReady(true); }
-                    else { signInAnonymously(auth).catch(console.error); }
-                });
-                return () => unsub();
-            }, []);
-
-            useEffect(() => {
-                if (!userId) return;
-                // Cargar configuración global
-                const { doc, onSnapshot } = window.firebase;
-                return onSnapshot(doc(db, `/artifacts/${appId}/public/data/settings`, "config"), s => s.exists() && setConfig(s.data()));
-            }, [userId]);
-
-            const handleLogin = (id, admin, name) => {
-                if (admin) { setIsAdmin(true); setAdminName(name); setEmployeeData(null); }
-                else { setIsAdmin(false); setEmployeeData({ id, name }); }
-            };
-
-            if (!isAuthReady) return <LoadingScreen />;
-            if (isAdmin) return <AdminDashboard db={db} appId={appId} onLogout={() => {setUserId(null); setIsAdmin(false)}} userId={userId} currentAdminName={adminName} globalConfig={config} />;
-            if (employeeData) return <EmployeeScreen db={db} appId={appId} onLogout={() => setEmployeeData(null)} employeeData={employeeData} globalConfig={config} />;
-            
-            return <LoginScreen db={db} appId={appId} onLogin={handleLogin} globalConfig={config} />;
-        };
-
-        // Renderizado inicial
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+            const saveEmp = async (e) => {
+                e.preventDefault();
+                const d = { name: empForm.name, department: empForm.dept, shiftStart: empForm.shiftStart, shiftEnd: empForm.shiftEnd, lunchStart: empForm.lunchStart, lunchEnd: empForm.lunchEnd };
+                if(empForm.pass) d.password = empForm.pass;
+                if(editEmpId) await updateDoc(doc(database, `artifacts/${appId}/public/data/employees`, editEmpId), d);
+                else await setDoc(doc(database, `artifacts/${appId}/public/data/employees`, empForm.id), {...d, createdAt: serverTimestamp()});
+                setEditEmpId(null); setEmpForm({ id: '', name: '', dept: '', pass: '', shiftStart: '', shiftEnd: '', lunchStart
